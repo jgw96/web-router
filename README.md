@@ -374,4 +374,4 @@ The router automatically uses the View Transitions API when available. Style you
 
 ## License
 
-MIT
+GPL-2
