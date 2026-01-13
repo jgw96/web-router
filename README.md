@@ -1,6 +1,6 @@
 # web-router
 
-![Size: 1.32 kB](https://img.shields.io/badge/size-1.32%20kB-brightgreen)
+![Size: 1.32 kB](https://img.shields.io/badge/size-[32m[1m1.32%20kB[22m[39m%20[90mbrotlied[39m-brightgreen)
 
 A lightweight, framework-agnostic router built on the [Navigation API](https://developer.mozilla.org/en-US/docs/Web/API/Navigation_API).
 
