@@ -27,8 +27,10 @@ jobs:
 
       - name: Get bundle size
         id: size
+        env:
+          NO_COLOR: 1
         run: |
-          SIZE=$(npm run size --silent | grep -A 2 "web-router.js" | grep "Size:" | head -1 | sed 's/.*Size:[[:space:]]*//' | sed 's/ brotlied//')
+          SIZE=$(npm run size --silent 2>&1 | grep -A 2 "web-router.js" | grep "Size:" | head -1 | sed 's/.*Size:[[:space:]]*//' | sed 's/ brotlied//')
           echo "size=$SIZE" >> $GITHUB_OUTPUT
 
       - name: Update README badge
