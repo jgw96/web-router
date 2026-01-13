@@ -1,0 +1,44 @@
+name: Update Size Badge
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'package.json'
+      - 'vite.config.ts'
+
+jobs:
+  update-size:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - name: Get bundle size
+        id: size
+        run: |
+          SIZE=$(npm run size --silent | grep -A 2 "web-router.js" | grep "Size:" | head -1 | sed 's/.*Size:[[:space:]]*//' | sed 's/ brotlied//')
+          echo "size=$SIZE" >> $GITHUB_OUTPUT
+
+      - name: Update README badge
+        run: |
+          SIZE="${{ steps.size.outputs.size }}"
+          ENCODED_SIZE=$(echo "$SIZE" | sed 's/ /%20/g')
+          sed -i "s|img.shields.io/badge/size-[^)]*|img.shields.io/badge/size-${ENCODED_SIZE}-brightgreen|g" README.md
+
+      - name: Commit changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git diff --quiet README.md || (git add README.md && git commit -m "chore: update size badge" && git push)
