@@ -66,6 +66,9 @@ Make this a modern, viable replacement for `@lit-labs/router`. Priorities: simpl
 - Redirects now call `this.navigate()` → `navigation.navigate()`, letting the platform handle URL updates, history, and loop prevention
 - Smaller bundle: 1.35 KB gzipped / 1.18 KB brotli
 
+## Known Issues
+- **Guard cancel/redirect runs inside `event.intercept()` handler** — the Navigation API has already intercepted the navigation by the time a plugin returns `false` or a redirect string, which can leave the URL bar out of sync with router state. Fix likely involves running guard checks before calling `event.intercept()`, but this conflicts with async plugins (lazy loading, auth). Needs deeper investigation into Navigation API abort/revert behavior.
+
 ## Future Considerations
 - Nested routes / outlets
 - Route-level `enter` guard (like lit-labs/router) as sugar over plugins
