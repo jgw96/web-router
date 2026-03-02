@@ -3,71 +3,77 @@
  *
  * @example
  * ```typescript
- * // Define your app's navigation state
  * interface MyAppState {
  *   user?: User;
  *   data?: SomeData;
  * }
  *
- * // Pass state during navigation
  * router.navigate('/user/123', { state: { user: myUser } });
- *
- * // Retrieve state in your component
  * const state = router.getNavigationState<MyAppState>();
  * ```
  */
 export type NavigationState = Record<string, unknown>;
 
+/** Extracted URL parameters from the matched route pattern. */
+export type RouteParams = Record<string, string | undefined>;
+
+/** Context passed to plugin hooks during navigation. */
+export interface NavigationContext<TRender = unknown> {
+  route: Route<TRender>;
+  params: RouteParams;
+  url: URL;
+}
+
 /**
  * Plugin interface for extending route behavior.
- * Plugins can run async code before navigation completes.
+ *
+ * - `beforeNavigation` runs before the route change. Return `false` to cancel,
+ *   or a string to redirect to that path.
+ * - `afterNavigation` runs after the DOM update completes.
  */
-export interface RouterPlugin {
+export interface RouterPlugin<TRender = unknown> {
   name?: string;
-  beforeNavigation?: () => void | Promise<unknown>;
+  beforeNavigation?: (
+    context: NavigationContext<TRender>
+  ) => void | boolean | string | Promise<void | boolean | string>;
+  afterNavigation?: (
+    context: NavigationContext<TRender>
+  ) => void | Promise<void>;
 }
 
 /**
  * Route configuration.
- * 
+ *
  * @typeParam TRender - The type returned by the render function (e.g., TemplateResult for Lit, HTMLElement for vanilla)
- * 
+ *
  * @example
  * ```typescript
  * // With Lit
- * import type { TemplateResult } from 'lit';
  * const route: Route<TemplateResult> = {
- *   path: '/',
- *   title: 'Home',
- *   render: () => html`<home-page></home-page>`
- * };
- * 
- * // With vanilla web components
- * const route: Route<HTMLElement> = {
- *   path: '/',
- *   title: 'Home',
- *   render: () => document.createElement('home-page')
+ *   path: '/user/:id',
+ *   title: 'User',
+ *   render: (params) => html`<user-page .userId=${params.id}></user-page>`
  * };
  * ```
  */
 export interface Route<TRender = unknown> {
   path: string;
   title: string;
-  render: () => TRender;
-  /** Plugins to run before navigation completes */
-  plugins?: RouterPlugin[];
+  render: (params: RouteParams) => TRender;
+  /** Plugins to run for this route */
+  plugins?: RouterPlugin<TRender>[];
 }
 
 /**
  * Router configuration options
- * 
+ *
  * @typeParam TRender - The type returned by route render functions
  */
 export interface RouterOptions<TRender = unknown> {
   /** Route definitions for the application */
   routes: Route<TRender>[];
   /** Global plugins to run on every navigation */
-  plugins?: RouterPlugin[];
+  plugins?: RouterPlugin<TRender>[];
 }
 
 /**
@@ -88,43 +94,25 @@ export interface RouterOptions<TRender = unknown> {
  *
  * const routes: Route<TemplateResult>[] = [
  *   { path: '/', title: 'Home', render: () => html`<home-page></home-page>` },
- *   { path: '/about', title: 'About', render: () => html`<about-page></about-page>` }
+ *   { path: '/user/:id', title: 'User', render: (params) => html`<user-page .userId=${params.id}></user-page>` }
  * ];
  *
  * const router = new Router({ routes });
  * await router.init();
  * ```
  *
- * @example
- * ```typescript
- * // With vanilla web components
- * import { Router, type Route } from 'web-router';
- *
- * const routes: Route<HTMLElement>[] = [
- *   { path: '/', title: 'Home', render: () => document.createElement('home-page') },
- *   { path: '/about', title: 'About', render: () => document.createElement('about-page') }
- * ];
- *
- * const router = new Router({ routes });
- * await router.init();
- *
- * // Render into DOM on route change
- * router.addEventListener('route-changed', () => {
- *   const outlet = document.getElementById('outlet')!;
- *   outlet.innerHTML = '';
- *   const content = router.render();
- *   if (content) outlet.appendChild(content);
- * });
- * ```
- *
- * @fires route-changed - Dispatched when navigation completes with `{ detail: { route: Route } }`
+ * @fires route-changed - Dispatched when navigation completes with `{ detail: { route, params } }`
  */
 export class Router<TRender = unknown> extends EventTarget {
   private routes: Route<TRender>[];
   private patterns: Map<URLPattern, Route<TRender>> = new Map();
   private currentRoute: Route<TRender> | null = null;
+  private currentParams: RouteParams = {};
+  private currentPathname: string = '';
   private initialized = false;
-  private plugins: RouterPlugin[];
+  private plugins: RouterPlugin<TRender>[];
+  private navigateHandler: ((event: NavigateEvent) => void) | null = null;
+  private popstateHandler: (() => void) | null = null;
 
   constructor(options: RouterOptions<TRender>) {
     super();
@@ -133,54 +121,55 @@ export class Router<TRender = unknown> extends EventTarget {
   }
 
   private setupNavigationListeners(): void {
-    window.navigation.addEventListener('navigate', (event) => {
-      // Only handle same-origin navigations
+    this.navigateHandler = (event) => {
       const url = new URL(event.destination.url);
 
-      if (url.origin !== window.location.origin) {
-        return;
-      }
+      if (url.origin !== window.location.origin) return;
+      if (event.downloadRequest || event.formData) return;
+      if (!event.canIntercept) return;
 
-      // Don't intercept downloads or form submissions
-      if (event.downloadRequest || event.formData) {
-        return;
-      }
-
-      // Can't intercept this navigation (e.g., cross-origin)
-      if (!event.canIntercept) {
-        return;
-      }
-
-      const route = this.matchRoute(url.pathname);
-      if (!route) {
-        return; // Let the browser handle unknown routes
-      }
+      const match = this.matchRoute(url.pathname);
+      if (!match) return;
 
       event.intercept({
         focusReset: 'manual',
         scroll: 'manual',
         handler: async () => {
-          await this.handleNavigation(route);
+          await this.handleNavigation(match.route, match.params, { url });
         },
       });
-    });
+    };
 
-    // Handle popstate for back/forward that might not trigger navigate event
-    window.addEventListener('popstate', () => {
-      const route = this.matchRoute(window.location.pathname);
-      if (route && route.path !== this.currentRoute?.path) {
-        this.handleNavigation(route);
+    window.navigation.addEventListener('navigate', this.navigateHandler);
+
+    this.popstateHandler = () => {
+      const url = new URL(window.location.href);
+      const match = this.matchRoute(url.pathname);
+      if (match && this.hasRouteChanged(match, url)) {
+        this.handleNavigation(match.route, match.params, { url });
       }
-    });
+    };
+
+    window.addEventListener('popstate', this.popstateHandler);
   }
 
-  /**
-   * Match a pathname to a route using URLPattern
-   */
-  private matchRoute(pathname: string): Route<TRender> | null {
+  private hasRouteChanged(
+    match: { route: Route<TRender>; params: RouteParams },
+    url: URL
+  ): boolean {
+    if (match.route.path !== this.currentRoute?.path) return true;
+    // Same route pattern but different URL (e.g. /user/1 vs /user/2)
+    if (url.pathname !== this.currentPathname) return true;
+    return false;
+  }
+
+  private matchRoute(
+    pathname: string
+  ): { route: Route<TRender>; params: RouteParams } | null {
     for (const [pattern, route] of this.patterns) {
-      if (pattern.test({ pathname })) {
-        return route;
+      const result = pattern.exec({ pathname });
+      if (result) {
+        return { route, params: result.pathname.groups };
       }
     }
     return null;
@@ -188,41 +177,51 @@ export class Router<TRender = unknown> extends EventTarget {
 
   private async handleNavigation(
     route: Route<TRender>,
-    options?: { skipViewTransition?: boolean }
+    params: RouteParams,
+    options?: { skipViewTransition?: boolean; url?: URL }
   ): Promise<void> {
+    const context: NavigationContext<TRender> = {
+      route,
+      params,
+      url: options?.url ?? new URL(window.location.href),
+    };
+
     // Run global plugins, then route-specific plugins
     const allPlugins = [...this.plugins, ...(route.plugins ?? [])];
     for (const plugin of allPlugins) {
       if (plugin.beforeNavigation) {
         try {
-          await plugin.beforeNavigation();
+          const result = await plugin.beforeNavigation(context);
+          if (result === false) return;
+          if (typeof result === 'string') {
+            await this.navigate(result);
+            return;
+          }
         } catch (error) {
           this.dispatchEvent(
             new CustomEvent('error', { detail: { error, plugin, route } })
           );
+          return;
         }
       }
     }
 
-    // Update document title
     if (route.title) {
       document.title = route.title;
     }
 
     const updateDOM = () => {
       this.currentRoute = route;
+      this.currentParams = params;
+      this.currentPathname = context.url.pathname;
       this.dispatchEvent(
-        new CustomEvent('route-changed', { detail: { route } })
+        new CustomEvent('route-changed', { detail: { route, params } })
       );
     };
 
-    // Skip view transition if requested (e.g., when closing a dialog that pushed history state)
     if (options?.skipViewTransition) {
       updateDOM();
-      return;
-    }
-
-    if ('startViewTransition' in document) {
+    } else if ('startViewTransition' in document) {
       try {
         const transition = (
           document as Document & {
@@ -233,16 +232,25 @@ export class Router<TRender = unknown> extends EventTarget {
             };
           }
         ).startViewTransition(updateDOM);
-
-        // Wait for animations to finish
         await transition.finished;
-      } catch (e) {
-        // If transition fails, just update DOM normally
-        console.warn('View transition failed:', e);
+      } catch {
         updateDOM();
       }
     } else {
       updateDOM();
+    }
+
+    // Run afterNavigation hooks
+    for (const plugin of allPlugins) {
+      if (plugin.afterNavigation) {
+        try {
+          await plugin.afterNavigation(context);
+        } catch (error) {
+          this.dispatchEvent(
+            new CustomEvent('error', { detail: { error, plugin, route } })
+          );
+        }
+      }
     }
   }
 
@@ -260,94 +268,73 @@ export class Router<TRender = unknown> extends EventTarget {
     }).finished;
   }
 
-  /**
-   * Get the current navigation state from the current history entry.
-   * Returns undefined if no state was passed during navigation.
-   *
-   * @typeParam T - The expected state type (defaults to NavigationState)
-   * @returns The navigation state or undefined
-   *
-   * @example
-   * ```typescript
-   * interface UserPageState {
-   *   user: User;
-   *   scrollPosition?: number;
-   * }
-   *
-   * // In your page component:
-   * const state = router.getNavigationState<UserPageState>();
-   * if (state?.user) {
-   *   // Use the passed user data immediately
-   *   this.user = state.user;
-   * } else {
-   *   // Fallback to fetching
-   *   this.user = await fetchUser(this.userId);
-   * }
-   * ```
-   */
-  getNavigationState<T extends NavigationState = NavigationState>(): T | undefined {
+  getNavigationState<T extends NavigationState = NavigationState>():
+    | T
+    | undefined {
     return window.navigation?.currentEntry?.getState() as T | undefined;
   }
 
   async init(): Promise<void> {
-    if (this.initialized) {
-      return;
-    }
+    if (this.initialized) return;
 
-    // Build URLPattern matchers for each route
     for (const route of this.routes) {
       const pattern = new URLPattern({ pathname: route.path });
       this.patterns.set(pattern, route);
     }
 
-    // Set initial route
-    this.currentRoute = this.matchRoute(window.location.pathname);
-
-    // Set up Navigation API listeners
     this.setupNavigationListeners();
-
     this.initialized = true;
 
     // Handle initial route
-    if (this.currentRoute) {
-      await this.handleNavigation(this.currentRoute);
+    const url = new URL(window.location.href);
+    const match = this.matchRoute(url.pathname);
+    if (match) {
+      await this.handleNavigation(match.route, match.params, { url });
     }
   }
 
-  /**
-   * Render the current route's template.
-   *
-   * @returns The result from the current route's render function,
-   *          or null if no route matches.
-   *
-   * @example
-   * ```typescript
-   * // In a Lit component:
-   * render() {
-   *   return html`
-   *     <header>...</header>
-   *     <main>${router.render()}</main>
-   *     <footer>...</footer>
-   *   `;
-   * }
-   *
-   * // With vanilla web components:
-   * router.addEventListener('route-changed', () => {
-   *   const outlet = document.getElementById('outlet')!;
-   *   outlet.innerHTML = '';
-   *   const content = router.render();
-   *   if (content) outlet.appendChild(content);
-   * });
-   * ```
-   */
   render(): TRender | null {
-    if (!this.currentRoute) {
-      return null;
-    }
-    return this.currentRoute.render();
+    if (!this.currentRoute) return null;
+    return this.currentRoute.render(this.currentParams);
   }
 
   getCurrentRoute(): Route<TRender> | null {
     return this.currentRoute;
+  }
+
+  getCurrentParams(): RouteParams {
+    return { ...this.currentParams };
+  }
+
+  getURL(): {
+    pathname: string;
+    search: string;
+    hash: string;
+    searchParams: URLSearchParams;
+  } | null {
+    if (!this.currentRoute) return null;
+    const url = new URL(window.location.href);
+    return {
+      pathname: url.pathname,
+      search: url.search,
+      hash: url.hash,
+      searchParams: url.searchParams,
+    };
+  }
+
+  destroy(): void {
+    if (this.navigateHandler) {
+      window.navigation.removeEventListener('navigate', this.navigateHandler);
+      this.navigateHandler = null;
+    }
+    if (this.popstateHandler) {
+      window.removeEventListener('popstate', this.popstateHandler);
+      this.popstateHandler = null;
+    }
+    this.currentRoute = null;
+    this.currentParams = {};
+    this.currentPathname = '';
+    this.patterns.clear();
+    this.initialized = false;
   }
 }

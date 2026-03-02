@@ -22,6 +22,8 @@ import type { RouterPlugin } from '../web-router.js';
 export function lazy(importFn: () => Promise<unknown>): RouterPlugin {
   return {
     name: 'lazy',
-    beforeNavigation: () => importFn(),
+    beforeNavigation: async () => {
+      await importFn();
+    },
   };
 }
