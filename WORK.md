@@ -31,8 +31,8 @@ Make this a modern, viable replacement for `@lit-labs/router`. Priorities: simpl
 - [x] getURL()
 
 ### Verification
-- [x] `npm test` passes (39/39)
-- [x] `npm run build` succeeds (1.55 KB gzipped / 1.35 KB brotli)
+- [x] `npm test` passes (38/38)
+- [x] `npm run build` succeeds (1.35 KB gzipped / 1.18 KB brotli)
 - [x] `npm run size` under 5KB limit
 
 ## API Summary
