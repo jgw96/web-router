@@ -108,6 +108,7 @@ export class Router<TRender = unknown> extends EventTarget {
   private patterns: Map<URLPattern, Route<TRender>> = new Map();
   private currentRoute: Route<TRender> | null = null;
   private currentParams: RouteParams = {};
+  private currentPathname: string = '';
   private initialized = false;
   private plugins: RouterPlugin<TRender>[];
   private navigateHandler: ((event: NavigateEvent) => void) | null = null;
@@ -158,7 +159,7 @@ export class Router<TRender = unknown> extends EventTarget {
   ): boolean {
     if (match.route.path !== this.currentRoute?.path) return true;
     // Same route pattern but different URL (e.g. /user/1 vs /user/2)
-    if (url.pathname !== this.getURL()?.pathname) return true;
+    if (url.pathname !== this.currentPathname) return true;
     return false;
   }
 
@@ -212,6 +213,7 @@ export class Router<TRender = unknown> extends EventTarget {
     const updateDOM = () => {
       this.currentRoute = route;
       this.currentParams = params;
+      this.currentPathname = context.url.pathname;
       this.dispatchEvent(
         new CustomEvent('route-changed', { detail: { route, params } })
       );
@@ -331,6 +333,7 @@ export class Router<TRender = unknown> extends EventTarget {
     }
     this.currentRoute = null;
     this.currentParams = {};
+    this.currentPathname = '';
     this.patterns.clear();
     this.initialized = false;
   }
