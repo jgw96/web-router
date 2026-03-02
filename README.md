@@ -1,6 +1,6 @@
 # web-router
 
-![Size: 1.35 kB](https://img.shields.io/badge/size-1.35%20kB-brightgreen)
+![Size: 1.35 kB](https://img.shields.io/badge/size-1.19%20kB-brightgreen)
 
 A tiny, modern client-side router built on the [Navigation API](https://developer.mozilla.org/en-US/docs/Web/API/Navigation_API) and [URL Pattern API](https://developer.mozilla.org/en-US/docs/Web/API/URL_Pattern_API). Designed for web components, works with anything.
 
