@@ -18,8 +18,8 @@ export type NavigationState = Record<string, unknown>;
 export type RouteParams = Record<string, string | undefined>;
 
 /** Context passed to plugin hooks during navigation. */
-export interface NavigationContext<TRender = unknown> {
-  route: Route<TRender>;
+export interface NavigationContext {
+  route: { path: string; title: string };
   params: RouteParams;
   url: URL;
 }
@@ -31,14 +31,12 @@ export interface NavigationContext<TRender = unknown> {
  *   or a string to redirect to that path.
  * - `afterNavigation` runs after the DOM update completes.
  */
-export interface RouterPlugin<TRender = unknown> {
+export interface RouterPlugin {
   name?: string;
   beforeNavigation?: (
-    context: NavigationContext<TRender>
+    context: NavigationContext
   ) => void | boolean | string | Promise<void | boolean | string>;
-  afterNavigation?: (
-    context: NavigationContext<TRender>
-  ) => void | Promise<void>;
+  afterNavigation?: (context: NavigationContext) => void | Promise<void>;
 }
 
 /**
@@ -61,7 +59,7 @@ export interface Route<TRender = unknown> {
   title: string;
   render: (params: RouteParams) => TRender;
   /** Plugins to run for this route */
-  plugins?: RouterPlugin<TRender>[];
+  plugins?: RouterPlugin[];
 }
 
 /**
@@ -73,7 +71,7 @@ export interface RouterOptions<TRender = unknown> {
   /** Route definitions for the application */
   routes: Route<TRender>[];
   /** Global plugins to run on every navigation */
-  plugins?: RouterPlugin<TRender>[];
+  plugins?: RouterPlugin[];
 }
 
 /**
@@ -110,7 +108,7 @@ export class Router<TRender = unknown> extends EventTarget {
   private currentParams: RouteParams = {};
   private currentPathname: string = '';
   private initialized = false;
-  private plugins: RouterPlugin<TRender>[];
+  private plugins: RouterPlugin[];
   private navigateHandler: ((event: NavigateEvent) => void) | null = null;
   private popstateHandler: (() => void) | null = null;
 
@@ -180,8 +178,8 @@ export class Router<TRender = unknown> extends EventTarget {
     params: RouteParams,
     options?: { skipViewTransition?: boolean; url?: URL }
   ): Promise<void> {
-    const context: NavigationContext<TRender> = {
-      route,
+    const context: NavigationContext = {
+      route: { path: route.path, title: route.title },
       params,
       url: options?.url ?? new URL(window.location.href),
     };
@@ -337,4 +335,17 @@ export class Router<TRender = unknown> extends EventTarget {
     this.patterns.clear();
     this.initialized = false;
   }
+}
+
+/**
+ * Creates a lazy loading plugin that dynamically imports a module
+ * before the route renders.
+ */
+export function lazy(importFn: () => Promise<unknown>): RouterPlugin {
+  return {
+    name: 'lazy',
+    beforeNavigation: async () => {
+      await importFn();
+    },
+  };
 }

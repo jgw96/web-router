@@ -316,14 +316,14 @@ describe('Router', () => {
     it('should run global plugins before route plugins', async () => {
       const order: string[] = [];
 
-      const globalPlugin: RouterPlugin<string> = {
+      const globalPlugin: RouterPlugin = {
         name: 'global',
         beforeNavigation: async () => {
           order.push('global');
         },
       };
 
-      const routePlugin: RouterPlugin<string> = {
+      const routePlugin: RouterPlugin = {
         name: 'route',
         beforeNavigation: async () => {
           order.push('route');
@@ -349,7 +349,7 @@ describe('Router', () => {
     it('should pass NavigationContext to beforeNavigation', async () => {
       navigateToPath('/user/77');
 
-      const plugin: RouterPlugin<string> = {
+      const plugin: RouterPlugin = {
         name: 'test',
         beforeNavigation: vi.fn(),
       };
@@ -370,7 +370,7 @@ describe('Router', () => {
     });
 
     it('should cancel navigation when beforeNavigation returns false', async () => {
-      const guardPlugin: RouterPlugin<string> = {
+      const guardPlugin: RouterPlugin = {
         name: 'guard',
         beforeNavigation: async () => false,
       };
@@ -405,7 +405,7 @@ describe('Router', () => {
         .fn()
         .mockReturnValue({ finished: Promise.resolve() });
 
-      const redirectPlugin: RouterPlugin<string> = {
+      const redirectPlugin: RouterPlugin = {
         name: 'redirect',
         beforeNavigation: async (ctx) => {
           if (ctx.route.path === '/old') return '/about';
@@ -452,7 +452,7 @@ describe('Router', () => {
 
     it('should cancel navigation and dispatch error event when plugin throws', async () => {
       const error = new Error('plugin failed');
-      const errorPlugin: RouterPlugin<string> = {
+      const errorPlugin: RouterPlugin = {
         name: 'failing',
         beforeNavigation: async () => {
           throw error;
@@ -486,7 +486,7 @@ describe('Router', () => {
     it('should run afterNavigation hooks after DOM update', async () => {
       const order: string[] = [];
 
-      const plugin: RouterPlugin<string> = {
+      const plugin: RouterPlugin = {
         name: 'lifecycle',
         beforeNavigation: async () => {
           order.push('before');
@@ -519,7 +519,7 @@ describe('Router', () => {
 
     it('should dispatch error event when afterNavigation throws', async () => {
       const error = new Error('after failed');
-      const plugin: RouterPlugin<string> = {
+      const plugin: RouterPlugin = {
         name: 'after-fail',
         afterNavigation: async () => {
           throw error;
