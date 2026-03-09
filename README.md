@@ -9,11 +9,10 @@ A tiny, modern client-side router built on the [Navigation API](https://develope
 ## Features
 
 - **~1.5 kB gzipped** — minimal footprint, zero runtime dependencies
-- **Navigation API** — built on the platform, not a polyfill
+- **Navigation API** — built on the platform
 - **URL Pattern API** — standard route matching with `:param` syntax
 - **View Transitions** — automatic integration for smooth page animations
 - **Route Params** — extracted and passed directly to your render function
-- **Plugin System** — guards, lazy loading, analytics, and more
 - **TypeScript** — fully typed with generic render output
 
 ## Installation
