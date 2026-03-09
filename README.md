@@ -4,7 +4,7 @@
 
 A tiny, modern client-side router built on the [Navigation API](https://developer.mozilla.org/en-US/docs/Web/API/Navigation_API) and [URL Pattern API](https://developer.mozilla.org/en-US/docs/Web/API/URL_Pattern_API). Designed for web components, works with anything.
 
-**AI used for code cleanup, code review etc. All code is human tested and reviewed**
+**AI used for code cleanup, code review, writing some tests etc. All code is human tested and reviewed. Based on an even simpler router I built by hand that I wanted to improve **
 
 ## Features
 
